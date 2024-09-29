@@ -145,14 +145,147 @@ class MyPromise {
   static reject(reason) {
     return new MyPromise((resolve, reject) => reject(reason))
   }
+
+  static all(iterable) {
+    let _resolve, _reject
+    const p = new MyPromise((resolve, reject) => {
+      _resolve = resolve
+      _reject = reject
+    })
+
+    let i = 0
+    const result = []
+    for (const iterator of iterable) {
+      const index = i
+      i++
+      MyPromise.resolve(iterator).then(
+        (value)=> {
+          result[index] = value
+          i--
+          if (i === 0) _resolve(result)
+        },
+        _reject
+      )
+    }
+    if (i === 0) _resolve([])
+    return p
+  }
+
+  static allSettled(iterable) {
+    let _resolve, _reject
+    const p = new MyPromise((resolve, reject) => {
+      _resolve = resolve
+      _reject = reject
+    })
+
+    let i = 0
+    const result = []
+    for (const iterator of iterable) {
+      const index = i
+      i++
+      MyPromise.resolve(iterator).then(
+        (value)=> {
+          result[index] = {
+            status: FULFILLED,
+            value
+          }
+        },
+        (reason) => {
+          result[index] = {
+            status: REJECTED,
+            reason
+          }
+        }
+      ).finally(() => {
+        i--
+        if (i === 0) _resolve(result)
+      })
+    }
+    if (i === 0) _resolve([])
+    return p
+  }
+
+  static race(iterable) {
+    let _resolve, _reject
+    const p = new MyPromise((resolve, reject) => {
+      _resolve = resolve
+      _reject = reject
+    })
+
+    for (const iterator of iterable) {
+      MyPromise.resolve(iterator).then(_resolve, _reject)
+    }
+    return p
+  }
+
+  static any(iterable) {
+    let _resolve, _reject
+    const p = new MyPromise((resolve, reject) => {
+      _resolve = resolve
+      _reject = reject
+    })
+
+    let i = 0
+    const result = []
+    for (const iterator of iterable) {
+      i++
+      const index = i
+      MyPromise.resolve(iterator).then(
+        _resolve, 
+        (reason) => {
+          i--
+          result[index] = reason
+          if (i === 0) _reject(new AggregateError(result))
+        }
+      )
+    }
+    if (i === 0) _reject(new AggregateError(result))
+    return p
+  }
 }
 
 /**
  *  测试代码
  */
+/** race */
+function sleep(time, value, state) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (state === "兑现") {
+        return resolve(value);
+      } else {
+        return reject(new Error(value));
+      }
+    }, time);
+  });
+}
+
+const p1 = sleep(500, "一", "拒绝");
+const p2 = sleep(100, "二", "兑现");
+const p3 = sleep(0, "一", "拒绝");
+
+MyPromise.any([p1, p3]).then(
+  res => {
+    console.log('race res', res);
+  },
+  err => {
+    console.log('race err', err);
+  }
+);
+
+/** all allSettled */
+// MyPromise.allSettled([1, Promise.reject(2).catch(()=>{throw 123}), Promise.resolve(3)]).then(
+//   res => {
+//     console.log('all res', res);
+//   },
+//   err => {
+//     console.log('all err', err);
+//   }
+// )
+
 /** reject */
-const p = new MyPromise((resolve, reject) => resolve(1))
-MyPromise.reject(p).catch(err => console.log(err))
+// const p = new MyPromise((resolve, reject) => resolve(1))
+// MyPromise.reject(p).catch(err => console.log(err))
 
 /** resolve */
 // const p = new MyPromise(resolve => resolve(1))
